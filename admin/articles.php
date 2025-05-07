@@ -1,6 +1,7 @@
 <?php
 require_once '../config/database.php';
 require_once '../includes/functions.php';
+require_once 'includes/header.php';
 
 if (!isLoggedIn()) {
     redirect('../login.php');
@@ -55,153 +56,95 @@ if ($action === 'edit' && $id) {
 
 // Get Articles for List
 $articles = getArticles($pdo);
+
+// Handle article deletion
+if (isset($_GET['delete'])) {
+    $id = (int)$_GET['delete'];
+    $conn->query("DELETE FROM articles WHERE id = $id");
+    header("Location: articles.php");
+    exit();
+}
+
+// Get all articles with category and author information
+$articles = $conn->query("
+    SELECT a.*, c.name as category_name, u.username as author_name 
+    FROM articles a 
+    LEFT JOIN categories c ON a.category_id = c.id 
+    LEFT JOIN users u ON a.author_id = u.id 
+    ORDER BY a.created_at DESC
+");
 ?>
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manajemen Artikel - CMS Sederhana</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-bs4.min.css" rel="stylesheet">
-</head>
-<body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container">
-            <a class="navbar-brand" href="#">CMS Sederhana</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="dashboard.php">Dashboard</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link active" href="articles.php">Artikel</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="categories.php">Kategori</a>
-                    </li>
-                </ul>
-                <ul class="navbar-nav">
-                    <li class="nav-item">
-                        <a class="nav-link" href="../logout.php">Logout</a>
-                    </li>
-                </ul>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Articles</h3>
+                <div class="card-tools">
+                    <a href="article_edit.php" class="btn btn-primary btn-sm">
+                        <i class="fas fa-plus"></i> New Article
+                    </a>
+                </div>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover text-nowrap">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Category</th>
+                            <th>Author</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php while ($article = $articles->fetch_assoc()): ?>
+                        <tr>
+                            <td><?php echo htmlspecialchars($article['title']); ?></td>
+                            <td><?php echo htmlspecialchars($article['category_name'] ?? 'Uncategorized'); ?></td>
+                            <td><?php echo htmlspecialchars($article['author_name']); ?></td>
+                            <td>
+                                <span class="badge badge-<?php echo $article['status'] == 'published' ? 'success' : 'warning'; ?>">
+                                    <?php echo ucfirst($article['status']); ?>
+                                </span>
+                            </td>
+                            <td><?php echo date('M d, Y', strtotime($article['created_at'])); ?></td>
+                            <td>
+                                <a href="article_edit.php?id=<?php echo $article['id']; ?>" class="btn btn-info btn-sm">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                                <a href="articles.php?delete=<?php echo $article['id']; ?>" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this article?')">
+                                    <i class="fas fa-trash"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        <?php endwhile; ?>
+                    </tbody>
+                </table>
             </div>
         </div>
-    </nav>
-
-    <div class="container mt-4">
-        <?php if ($message): ?>
-            <div class="alert alert-success"><?php echo $message; ?></div>
-        <?php endif; ?>
-
-        <?php if ($action === 'list'): ?>
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">Daftar Artikel</h5>
-                    <a href="?action=create" class="btn btn-primary btn-sm">Tambah Artikel</a>
-                </div>
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>Judul</th>
-                                    <th>Kategori</th>
-                                    <th>Status</th>
-                                    <th>Tanggal</th>
-                                    <th>Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($articles as $article): ?>
-                                <tr>
-                                    <td><?php echo sanitize($article['title']); ?></td>
-                                    <td><?php echo sanitize($article['category_name']); ?></td>
-                                    <td>
-                                        <span class="badge bg-<?php echo $article['status'] === 'published' ? 'success' : 'warning'; ?>">
-                                            <?php echo $article['status']; ?>
-                                        </span>
-                                    </td>
-                                    <td><?php echo date('d/m/Y', strtotime($article['created_at'])); ?></td>
-                                    <td>
-                                        <a href="?action=edit&id=<?php echo $article['id']; ?>" class="btn btn-sm btn-warning">
-                                            <i class="bi bi-pencil"></i>
-                                        </a>
-                                        <a href="?action=delete&id=<?php echo $article['id']; ?>" class="btn btn-sm btn-danger" onclick="return confirm('Yakin ingin menghapus?')">
-                                            <i class="bi bi-trash"></i>
-                                        </a>
-                                    </td>
-                                </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        <?php else: ?>
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0"><?php echo $action === 'create' ? 'Tambah Artikel' : 'Edit Artikel'; ?></h5>
-                </div>
-                <div class="card-body">
-                    <form method="POST">
-                        <div class="mb-3">
-                            <label for="title" class="form-label">Judul</label>
-                            <input type="text" class="form-control" id="title" name="title" value="<?php echo $article['title'] ?? ''; ?>" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="category_id" class="form-label">Kategori</label>
-                            <select class="form-select" id="category_id" name="category_id" required>
-                                <option value="">Pilih Kategori</option>
-                                <?php foreach ($categories as $category): ?>
-                                <option value="<?php echo $category['id']; ?>" <?php echo ($article['category_id'] ?? '') == $category['id'] ? 'selected' : ''; ?>>
-                                    <?php echo sanitize($category['name']); ?>
-                                </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label for="content" class="form-label">Konten</label>
-                            <textarea class="form-control" id="content" name="content" rows="10" required><?php echo $article['content'] ?? ''; ?></textarea>
-                        </div>
-                        <div class="mb-3">
-                            <label for="status" class="form-label">Status</label>
-                            <select class="form-select" id="status" name="status" required>
-                                <option value="draft" <?php echo ($article['status'] ?? '') === 'draft' ? 'selected' : ''; ?>>Draft</option>
-                                <option value="published" <?php echo ($article['status'] ?? '') === 'published' ? 'selected' : ''; ?>>Published</option>
-                            </select>
-                        </div>
-                        <button type="submit" class="btn btn-primary">Simpan</button>
-                        <a href="?action=list" class="btn btn-secondary">Kembali</a>
-                    </form>
-                </div>
-            </div>
-        <?php endif; ?>
     </div>
+</div>
 
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-bs4.min.js"></script>
-    <script>
-        $(document).ready(function() {
-            $('#content').summernote({
-                height: 300,
-                toolbar: [
-                    ['style', ['style']],
-                    ['font', ['bold', 'underline', 'clear']],
-                    ['color', ['color']],
-                    ['para', ['ul', 'ol', 'paragraph']],
-                    ['table', ['table']],
-                    ['insert', ['link', 'picture']],
-                    ['view', ['fullscreen', 'codeview', 'help']]
-                ]
-            });
+<?php require_once 'includes/footer.php'; ?>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-bs4.min.js"></script>
+<script>
+    $(document).ready(function() {
+        $('#content').summernote({
+            height: 300,
+            toolbar: [
+                ['style', ['style']],
+                ['font', ['bold', 'underline', 'clear']],
+                ['color', ['color']],
+                ['para', ['ul', 'ol', 'paragraph']],
+                ['table', ['table']],
+                ['insert', ['link', 'picture']],
+                ['view', ['fullscreen', 'codeview', 'help']]
+            ]
         });
-    </script>
-</body>
-</html> 
+    });
+</script> 

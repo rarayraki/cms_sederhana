@@ -1,6 +1,7 @@
 <?php
 require_once '../config/database.php';
 require_once '../includes/functions.php';
+require_once 'includes/header.php';
 
 if (!isLoggedIn()) {
     redirect('../login.php');
@@ -50,110 +51,143 @@ if ($action === 'edit' && $id) {
 
 // Get Categories for List
 $categories = getCategories($pdo);
+
+// Handle category deletion
+if (isset($_GET['delete'])) {
+    $id = (int)$_GET['delete'];
+    $conn->query("DELETE FROM categories WHERE id = $id");
+    header("Location: categories.php");
+    exit();
+}
+
+// Get all categories
+$allCategories = $conn->query("SELECT * FROM categories ORDER BY name");
 ?>
-<!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manajemen Kategori - CMS Sederhana</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
-</head>
-<body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container">
-            <a class="navbar-brand" href="#">CMS Sederhana</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="dashboard.php">Dashboard</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="articles.php">Artikel</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link active" href="categories.php">Kategori</a>
-                    </li>
-                </ul>
-                <ul class="navbar-nav">
-                    <li class="nav-item">
-                        <a class="nav-link" href="../logout.php">Logout</a>
-                    </li>
-                </ul>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Categories</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-primary btn-sm" data-toggle="modal" data-target="#categoryModal">
+                        <i class="fas fa-plus"></i> New Category
+                    </button>
+                </div>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover text-nowrap">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Slug</th>
+                            <th>Description</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php while ($category = $allCategories->fetch_assoc()): ?>
+                        <tr>
+                            <td><?php echo htmlspecialchars($category['name']); ?></td>
+                            <td><?php echo htmlspecialchars($category['slug']); ?></td>
+                            <td><?php echo htmlspecialchars($category['description'] ?? ''); ?></td>
+                            <td><?php echo date('M d, Y', strtotime($category['created_at'])); ?></td>
+                            <td>
+                                <button type="button" class="btn btn-info btn-sm edit-category" 
+                                        data-id="<?php echo $category['id']; ?>"
+                                        data-name="<?php echo htmlspecialchars($category['name']); ?>"
+                                        data-description="<?php echo htmlspecialchars($category['description'] ?? ''); ?>">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <a href="categories.php?delete=<?php echo $category['id']; ?>" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this category?')">
+                                    <i class="fas fa-trash"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        <?php endwhile; ?>
+                    </tbody>
+                </table>
             </div>
         </div>
-    </nav>
+    </div>
+</div>
 
-    <div class="container mt-4">
-        <?php if ($message): ?>
-            <div class="alert alert-success"><?php echo $message; ?></div>
-        <?php endif; ?>
-
-        <?php if ($action === 'list'): ?>
-            <div class="card">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">Daftar Kategori</h5>
-                    <a href="?action=create" class="btn btn-primary btn-sm">Tambah Kategori</a>
-                </div>
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>Nama</th>
-                                    <th>Slug</th>
-                                    <th>Deskripsi</th>
-                                    <th>Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($categories as $category): ?>
-                                <tr>
-                                    <td><?php echo sanitize($category['name']); ?></td>
-                                    <td><?php echo sanitize($category['slug']); ?></td>
-                                    <td><?php echo sanitize($category['description']); ?></td>
-                                    <td>
-                                        <a href="?action=edit&id=<?php echo $category['id']; ?>" class="btn btn-sm btn-warning">
-                                            <i class="bi bi-pencil"></i>
-                                        </a>
-                                        <a href="?action=delete&id=<?php echo $category['id']; ?>" class="btn btn-sm btn-danger" onclick="return confirm('Yakin ingin menghapus?')">
-                                            <i class="bi bi-trash"></i>
-                                        </a>
-                                    </td>
-                                </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
+<!-- Category Modal -->
+<div class="modal fade" id="categoryModal" tabindex="-1" role="dialog" aria-labelledby="categoryModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="categoryModalLabel">New Category</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form id="categoryForm" method="post">
+                <div class="modal-body">
+                    <input type="hidden" id="category_id" name="id">
+                    <div class="form-group">
+                        <label for="name">Name</label>
+                        <input type="text" class="form-control" id="name" name="name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="description">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="3"></textarea>
                     </div>
                 </div>
-            </div>
-        <?php else: ?>
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0"><?php echo $action === 'create' ? 'Tambah Kategori' : 'Edit Kategori'; ?></h5>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
                 </div>
-                <div class="card-body">
-                    <form method="POST">
-                        <div class="mb-3">
-                            <label for="name" class="form-label">Nama Kategori</label>
-                            <input type="text" class="form-control" id="name" name="name" value="<?php echo $category['name'] ?? ''; ?>" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="description" class="form-label">Deskripsi</label>
-                            <textarea class="form-control" id="description" name="description" rows="3"><?php echo $category['description'] ?? ''; ?></textarea>
-                        </div>
-                        <button type="submit" class="btn btn-primary">Simpan</button>
-                        <a href="?action=list" class="btn btn-secondary">Kembali</a>
-                    </form>
-                </div>
-            </div>
-        <?php endif; ?>
+            </form>
+        </div>
     </div>
+</div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html> 
+<script>
+$(document).ready(function() {
+    // Handle form submission
+    $('#categoryForm').on('submit', function(e) {
+        e.preventDefault();
+        var formData = $(this).serialize();
+        
+        $.ajax({
+            url: 'category_save.php',
+            type: 'POST',
+            data: formData,
+            success: function(response) {
+                if (response.success) {
+                    location.reload();
+                } else {
+                    alert('Error: ' + response.message);
+                }
+            },
+            error: function() {
+                alert('An error occurred while saving the category.');
+            }
+        });
+    });
+
+    // Handle edit button click
+    $('.edit-category').on('click', function() {
+        var id = $(this).data('id');
+        var name = $(this).data('name');
+        var description = $(this).data('description');
+        
+        $('#category_id').val(id);
+        $('#name').val(name);
+        $('#description').val(description);
+        $('#categoryModalLabel').text('Edit Category');
+        $('#categoryModal').modal('show');
+    });
+
+    // Reset form when modal is closed
+    $('#categoryModal').on('hidden.bs.modal', function() {
+        $('#categoryForm')[0].reset();
+        $('#category_id').val('');
+        $('#categoryModalLabel').text('New Category');
+    });
+});
+</script>
+
+<?php require_once 'includes/footer.php'; ?> 

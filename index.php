@@ -1,113 +1,214 @@
 <?php
 require_once 'config/database.php';
-require_once 'includes/functions.php';
 
+// Get categories for navigation
+$categories = $conn->query("SELECT * FROM categories ORDER BY name");
+
+// Get articles
 $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
-$limit = 10;
-$offset = ($page - 1) * $limit;
+$per_page = 10;
+$offset = ($page - 1) * $per_page;
 
-$articles = getArticles($pdo, $limit, $offset);
-$categories = getCategories($pdo);
+$category_id = isset($_GET['category']) ? (int)$_GET['category'] : null;
+$search = isset($_GET['search']) ? $_GET['search'] : '';
+
+$where = "WHERE status = 'published'";
+if ($category_id) {
+    $where .= " AND category_id = $category_id";
+}
+if ($search) {
+    $search = $conn->real_escape_string($search);
+    $where .= " AND (title LIKE '%$search%' OR content LIKE '%$search%')";
+}
+
+$articles = $conn->query("
+    SELECT a.*, c.name as category_name, u.username as author_name 
+    FROM articles a 
+    LEFT JOIN categories c ON a.category_id = c.id 
+    LEFT JOIN users u ON a.author_id = u.id 
+    $where
+    ORDER BY a.created_at DESC 
+    LIMIT $offset, $per_page
+");
+
+// Get total articles for pagination
+$total_result = $conn->query("SELECT COUNT(*) as total FROM articles $where");
+$total_articles = $total_result->fetch_assoc()['total'];
+$total_pages = ceil($total_articles / $per_page);
 ?>
 <!DOCTYPE html>
-<html lang="id">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>CMS Sederhana</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- Google Font: Source Sans Pro -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=fallback">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <!-- AdminLTE CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/css/adminlte.min.css">
+    <style>
+        .article-card {
+            margin-bottom: 20px;
+        }
+        .article-meta {
+            color: #6c757d;
+            font-size: 0.9em;
+        }
+        .article-content {
+            margin-top: 10px;
+        }
+        .article-content img {
+            max-width: 100%;
+            height: auto;
+        }
+    </style>
 </head>
-<body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container">
-            <a class="navbar-brand" href="index.php">CMS Sederhana</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link active" href="index.php">Beranda</a>
-                    </li>
-                    <?php foreach ($categories as $category): ?>
-                    <li class="nav-item">
-                        <a class="nav-link" href="category.php?slug=<?php echo $category['slug']; ?>">
-                            <?php echo sanitize($category['name']); ?>
-                        </a>
-                    </li>
-                    <?php endforeach; ?>
-                </ul>
-                <ul class="navbar-nav">
-                    <li class="nav-item">
-                        <a class="nav-link" href="login.php">Login</a>
-                    </li>
-                </ul>
-            </div>
-        </div>
-    </nav>
+<body class="hold-transition layout-top-nav">
+    <div class="wrapper">
+        <!-- Navbar -->
+        <nav class="main-header navbar navbar-expand-md navbar-light navbar-white">
+            <div class="container">
+                <a href="index.php" class="navbar-brand">
+                    <span class="brand-text font-weight-light">CMS Sederhana</span>
+                </a>
 
-    <div class="container mt-4">
-        <div class="row">
-            <div class="col-md-8">
-                <?php foreach ($articles as $article): ?>
-                <div class="card mb-4">
-                    <div class="card-body">
-                        <h2 class="card-title">
-                            <a href="article.php?slug=<?php echo $article['slug']; ?>" class="text-decoration-none text-dark">
-                                <?php echo sanitize($article['title']); ?>
+                <button class="navbar-toggler order-1" type="button" data-toggle="collapse" data-target="#navbarCollapse">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+
+                <div class="collapse navbar-collapse order-3" id="navbarCollapse">
+                    <!-- Left navbar links -->
+                    <ul class="navbar-nav">
+                        <li class="nav-item">
+                            <a href="index.php" class="nav-link">Home</a>
+                        </li>
+                        <?php while ($category = $categories->fetch_assoc()): ?>
+                        <li class="nav-item">
+                            <a href="index.php?category=<?php echo $category['id']; ?>" class="nav-link">
+                                <?php echo htmlspecialchars($category['name']); ?>
                             </a>
-                        </h2>
-                        <p class="card-text text-muted">
-                            <small>
-                                <i class="bi bi-person"></i> <?php echo sanitize($article['author_name']); ?> |
-                                <i class="bi bi-folder"></i> <?php echo sanitize($article['category_name']); ?> |
-                                <i class="bi bi-calendar"></i> <?php echo date('d/m/Y', strtotime($article['created_at'])); ?>
-                            </small>
-                        </p>
-                        <p class="card-text">
-                            <?php echo substr(strip_tags($article['content']), 0, 200) . '...'; ?>
-                        </p>
-                        <a href="article.php?slug=<?php echo $article['slug']; ?>" class="btn btn-primary">Baca Selengkapnya</a>
+                        </li>
+                        <?php endwhile; ?>
+                    </ul>
+
+                    <!-- Right navbar links -->
+                    <ul class="navbar-nav ml-auto">
+                        <li class="nav-item">
+                            <a href="login.php" class="nav-link">
+                                <i class="fas fa-sign-in-alt"></i> Login
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Content Wrapper -->
+        <div class="content-wrapper">
+            <div class="content-header">
+                <div class="container">
+                    <div class="row mb-2">
+                        <div class="col-sm-6">
+                            <h1 class="m-0">Articles</h1>
+                        </div>
+                        <div class="col-sm-6">
+                            <form action="" method="get" class="form-inline float-right">
+                                <?php if ($category_id): ?>
+                                <input type="hidden" name="category" value="<?php echo $category_id; ?>">
+                                <?php endif; ?>
+                                <div class="input-group">
+                                    <input type="text" name="search" class="form-control" placeholder="Search..." value="<?php echo htmlspecialchars($search); ?>">
+                                    <div class="input-group-append">
+                                        <button type="submit" class="btn btn-default">
+                                            <i class="fas fa-search"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
                     </div>
                 </div>
-                <?php endforeach; ?>
             </div>
-            <div class="col-md-4">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">Kategori</h5>
-                    </div>
-                    <div class="card-body">
-                        <ul class="list-unstyled">
-                            <?php foreach ($categories as $category): ?>
-                            <li class="mb-2">
-                                <a href="category.php?slug=<?php echo $category['slug']; ?>" class="text-decoration-none">
-                                    <?php echo sanitize($category['name']); ?>
-                                </a>
-                            </li>
-                            <?php endforeach; ?>
-                        </ul>
+
+            <!-- Main content -->
+            <div class="content">
+                <div class="container">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <?php if ($articles->num_rows > 0): ?>
+                                <?php while ($article = $articles->fetch_assoc()): ?>
+                                <div class="card article-card">
+                                    <div class="card-body">
+                                        <h5 class="card-title">
+                                            <a href="article.php?slug=<?php echo $article['slug']; ?>" class="text-dark">
+                                                <?php echo htmlspecialchars($article['title']); ?>
+                                            </a>
+                                        </h5>
+                                        <div class="article-meta">
+                                            <i class="fas fa-folder"></i> <?php echo htmlspecialchars($article['category_name'] ?? 'Uncategorized'); ?> |
+                                            <i class="fas fa-user"></i> <?php echo htmlspecialchars($article['author_name']); ?> |
+                                            <i class="fas fa-calendar"></i> <?php echo date('M d, Y', strtotime($article['created_at'])); ?>
+                                        </div>
+                                        <div class="article-content">
+                                            <?php 
+                                            $content = strip_tags($article['content']);
+                                            echo strlen($content) > 300 ? substr($content, 0, 300) . '...' : $content;
+                                            ?>
+                                        </div>
+                                        <a href="article.php?slug=<?php echo $article['slug']; ?>" class="btn btn-primary btn-sm mt-2">Read More</a>
+                                    </div>
+                                </div>
+                                <?php endwhile; ?>
+
+                                <!-- Pagination -->
+                                <?php if ($total_pages > 1): ?>
+                                <nav aria-label="Page navigation">
+                                    <ul class="pagination justify-content-center">
+                                        <?php if ($page > 1): ?>
+                                        <li class="page-item">
+                                            <a class="page-link" href="?page=<?php echo $page-1; ?><?php echo $category_id ? '&category='.$category_id : ''; ?><?php echo $search ? '&search='.urlencode($search) : ''; ?>">Previous</a>
+                                        </li>
+                                        <?php endif; ?>
+                                        
+                                        <?php for ($i = 1; $i <= $total_pages; $i++): ?>
+                                        <li class="page-item <?php echo $i == $page ? 'active' : ''; ?>">
+                                            <a class="page-link" href="?page=<?php echo $i; ?><?php echo $category_id ? '&category='.$category_id : ''; ?><?php echo $search ? '&search='.urlencode($search) : ''; ?>"><?php echo $i; ?></a>
+                                        </li>
+                                        <?php endfor; ?>
+                                        
+                                        <?php if ($page < $total_pages): ?>
+                                        <li class="page-item">
+                                            <a class="page-link" href="?page=<?php echo $page+1; ?><?php echo $category_id ? '&category='.$category_id : ''; ?><?php echo $search ? '&search='.urlencode($search) : ''; ?>">Next</a>
+                                        </li>
+                                        <?php endif; ?>
+                                    </ul>
+                                </nav>
+                                <?php endif; ?>
+                            <?php else: ?>
+                                <div class="alert alert-info">No articles found.</div>
+                            <?php endif; ?>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
+
+        <!-- Main Footer -->
+        <footer class="main-footer">
+            <div class="float-right d-none d-sm-block">
+                <b>Version</b> 1.0.0
+            </div>
+            <strong>Copyright &copy; <?php echo date('Y'); ?> <a href="#">CMS Sederhana</a>.</strong> All rights reserved.
+        </footer>
     </div>
 
-    <footer class="bg-dark text-light mt-5">
-        <div class="container py-4">
-            <div class="row">
-                <div class="col-md-6">
-                    <h5>CMS Sederhana</h5>
-                    <p>Sebuah sistem manajemen konten sederhana yang dibuat dengan PHP dan MySQL.</p>
-                </div>
-                <div class="col-md-6 text-md-end">
-                    <p>&copy; <?php echo date('Y'); ?> CMS Sederhana. All rights reserved.</p>
-                </div>
-            </div>
-        </div>
-    </footer>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- Bootstrap 4 -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- AdminLTE App -->
+    <script src="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/js/adminlte.min.js"></script>
 </body>
 </html> 
